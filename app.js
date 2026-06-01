@@ -1,4 +1,5 @@
 const CSS_URL = "./assets/caveduck.css";
+const OBJECT_TEST_PATTERN_URL = "./assets/object-fit-test-pattern.svg";
 const PAGE_SIZE = 80;
 const FAMILY_LIMIT = 20;
 
@@ -44,6 +45,7 @@ const state = {
 const els = {
   tabs: document.querySelector("#categoryTabs"),
   usageTabs: document.querySelector("#usageTabs"),
+  listHead: document.querySelector(".ccr-list-head"),
   list: document.querySelector("#classList"),
   search: document.querySelector("#classSearch"),
   count: document.querySelector("#resultCount"),
@@ -271,7 +273,8 @@ function detectPreviewType(base, declarations, name) {
 
 function detectStaticPreviewType(base, declarations) {
   if (/^(duration|transition|delay|ease)-/.test(base)) return "no-preview";
-  if (/^(top|right|bottom|left|inset|z-|absolute|relative|fixed|sticky|static|translate|rotate|scale|skew|transform)/.test(base) || hasAnyDeclaration(declarations, ["top", "right", "bottom", "left", "inset", "position", "z-index", "translate", "rotate", "scale", "transform"])) return "position-preview";
+  if (/^(absolute|relative|fixed|sticky|static)$/.test(base)) return "no-preview";
+  if (/^(top|right|bottom|left|inset|z-|translate|rotate|scale|skew|transform)/.test(base) || hasAnyDeclaration(declarations, ["top", "right", "bottom", "left", "inset", "z-index", "translate", "rotate", "scale", "transform"])) return "position-preview";
   if (/^(m[trblxy]?|p[trblxy]?|gap|space-[xy])-/.test(base) || hasDeclarationLike(declarations, /^(margin|padding|gap|row-gap|column-gap)/)) return "spacing-preview";
   if (/^(rounded|border|outline|ring)/.test(base) || hasDeclarationLike(declarations, /^(border|outline)/)) return "box-preview";
   if (/^(bg|text|border|fill|stroke|accent|caret|from|via|to)-/.test(base) || hasDeclarationLike(declarations, /(color|background|fill|stroke)/)) return "color-preview";
@@ -474,6 +477,7 @@ function renderViewControls(total) {
   els.viewButtons.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.viewMode === state.viewMode);
   });
+  els.listHead.hidden = state.viewMode === "compare";
 
   if (state.viewMode === "family" && state.selected) {
     els.viewLabel.textContent = `${state.selected.familyKey} 同系列：${total.toLocaleString()} classes`;
@@ -535,8 +539,8 @@ function renderList(items, total, totalPages) {
 
 function renderCompareList(items, start, end, total, totalPages) {
   els.list.innerHTML =
-    `<div class="ccr-compare-board ${compareBoardClass(items)}">
-      ${items.map(compareCardMarkup).join("")}
+    `<div class="ccr-compare-board ${compareBoardClass(items)}" style="${compareBoardStyle(items)}">
+      ${items.map((item) => compareCardMarkup(item, items)).join("")}
     </div>` + paginationMarkup(start, end, total, totalPages);
 
   els.list.querySelectorAll(".ccr-compare-card").forEach((card) => {
@@ -551,18 +555,23 @@ function renderCompareList(items, start, end, total, totalPages) {
   });
 }
 
-function compareCardMarkup(item) {
-  const selected = item === state.selected ? " is-selected" : "";
-  const value = positionValueLabel(item) || sizeValueLabel(item) || "";
-  return `<article class="ccr-compare-card${selected}" data-class="${escapeHtml(item.name)}">
-    <div class="ccr-compare-card-head">
-      <code class="ccr-class-name">${escapeHtml(item.name)}</code>
-      <button class="ccr-copy" type="button" data-copy-value="${escapeHtml(item.name)}" aria-label="Copy ${escapeHtml(item.name)}">
-        ${copyIcon()}
-      </button>
+  function compareCardMarkup(item, items = []) {
+    const selected = item === state.selected ? " is-selected" : "";
+    const layout = compareBoardLayout(item);
+    const orientation = comparePreviewClass(item);
+    const previewClass = layout === "grid" ? "is-grid" : orientation;
+    const actualSizeClass = isActualVerticalSizePreview(item, layout) ? " has-actual-size" : "";
+    const value = positionValueLabel(item) || sizeValueLabel(item) || "";
+    const cardStyle = compareCardStyle(item, items);
+    return `<article class="ccr-compare-card ${orientation} is-${layout}${actualSizeClass}${selected}" data-class="${escapeHtml(item.name)}"${cardStyle ? ` style="${escapeHtml(cardStyle)}"` : ""}>
+      <div class="ccr-compare-card-head">
+        <code class="ccr-class-name">${escapeHtml(item.name)}</code>
+        <button class="ccr-copy" type="button" data-copy-value="${escapeHtml(item.name)}" aria-label="Copy ${escapeHtml(item.name)}">
+          ${copyIcon()}
+        </button>
     </div>
-    <div class="ccr-compare-card-preview ${comparePreviewClass(item)}">
-      ${comparePreviewMarkup(item)}
+    <div class="ccr-compare-card-preview ${previewClass}">
+      ${comparePreviewMarkup(item, layout)}
       ${value ? `<span class="ccr-box-value">${escapeHtml(value)}</span>` : ""}
     </div>
     <div class="ccr-compare-card-summary">
@@ -574,8 +583,25 @@ function compareCardMarkup(item) {
 
 function compareBoardClass(items) {
   const selected = items.includes(state.selected) ? state.selected : items[0];
-  return selected ? comparePreviewClass(selected) : "is-horizontal";
+  const layout = selected ? compareBoardLayout(selected) : "horizontal-overlay";
+  const scrollable = layout !== "grid" && items.length > 5 ? " is-scrollable" : "";
+  return `is-${layout}${scrollable}`;
 }
+
+  function compareBoardStyle(items) {
+    const selected = items.includes(state.selected) ? state.selected : items[0];
+    if (!selected || compareBoardLayout(selected) !== "vertical-overlay") return "";
+    if (compareKind(selected) === "size") {
+      const maxMagnitude = Math.max(...items.map(compareMagnitude), 0);
+      const frameHeight = Math.max(0, Math.round(maxMagnitude));
+      const previewHeight = frameHeight + 30;
+      return `align-items: stretch; --ccr-compare-head-height: 52px; --ccr-compare-preview-height: ${previewHeight}px; --ccr-compare-frame-height: ${frameHeight}px`;
+    }
+    const maxMagnitude = Math.max(...items.map(compareMagnitude), 0);
+    const frameHeight = Math.max(190, Math.min(290, Math.ceil(maxMagnitude * 0.9 + 130)));
+    const previewHeight = frameHeight + 30;
+    return `align-items: stretch; --ccr-compare-head-height: 52px; --ccr-compare-preview-height: ${previewHeight}px; --ccr-compare-frame-height: ${frameHeight}px`;
+  }
 
 function selectClass(name) {
   state.selected = state.classes.find((item) => item.name === name) || state.selected;
@@ -846,16 +872,27 @@ function formatNumber(value) {
   return Number.parseFloat(value.toFixed(6)).toString();
 }
 
-function previewMarkup(item, large = false) {
-  const sizeClass = large ? " is-large" : "";
-  const valueMarkup = spacingValueMarkup(item);
-  return `<div class="ccr-preview-canvas${sizeClass} is-${item.previewType}">
-    ${previewContent(item, large)}
-  </div>${valueMarkup}`;
+  function previewMarkup(item, large = false) {
+    const sizeClass = large ? " is-large" : "";
+    const explicitSizeClass = hasExplicitPreviewSize(item) ? " has-explicit-size" : "";
+    const compareSizeClass = isCompareSizePreview(item) ? " is-size-preview" : "";
+    const objectClass = hasObjectPreview(item) ? " is-object-preview" : "";
+    const valueMarkup = spacingValueMarkup(item);
+    return `<div class="ccr-preview-canvas${sizeClass}${explicitSizeClass}${compareSizeClass}${objectClass} is-${item.previewType}">
+      ${previewContent(item, large)}
+    </div>${valueMarkup}`;
+  }
+
+function hasExplicitPreviewSize(item) {
+  const declarations = declarationMap(item.cssText);
+  return hasDeclarationLike(declarations, /^(width|height|min-width|min-height|max-width|max-height)$/);
 }
 
 function previewContent(item, large = false) {
   const style = previewStyle(item);
+  if (isCompareSizePreview(item)) {
+    return sizePreviewMarkup(item, style, large);
+  }
   if (item.previewType === "no-preview" || item.previewType === "state-preview") {
     return `<div class="ccr-preview-note">${escapeHtml(item.previewType === "state-preview" ? "需要互動狀態" : "無靜態預覽")}</div>`;
   }
@@ -871,6 +908,15 @@ function previewContent(item, large = false) {
   if (item.previewType === "typography-preview") {
     return `<p class="ccr-preview-subject ccr-text-sample" style="${escapeHtml(style)}">Item text sample that can overflow</p>`;
   }
+  if (hasObjectPreview(item)) {
+    const config = objectPreviewConfig(item);
+    return `<div class="ccr-object-preview">
+      <div class="ccr-object-frame">
+        <div class="ccr-object-image" aria-hidden="true" style="${escapeHtml(objectImageStyle(config))}"></div>
+      </div>
+      <span class="ccr-object-label">${escapeHtml(config.label)}</span>
+    </div>`;
+  }
   if (item.previewType === "layout-preview") {
     return `<div class="ccr-preview-subject ccr-layout-sample" style="${escapeHtml(style)}"><span>A</span><span>B</span><span>C</span></div>`;
   }
@@ -885,6 +931,15 @@ function previewContent(item, large = false) {
   }
   return `<div class="ccr-preview-subject" style="${escapeHtml(style)}">Item</div>`;
 }
+
+  function sizePreviewMarkup(item, style, large = false) {
+    const metrics = sizePreviewMetrics(item, large);
+    const subjectStyle = sizeSubjectStyle(item, style, large, metrics);
+    const frameStyle = metrics.frameHeight ? ` style="${escapeHtml(`height: ${metrics.frameHeight}px; min-height: ${metrics.frameHeight}px`)}"` : "";
+    return `<div class="ccr-compare-size-frame"${frameStyle}>
+      <div class="ccr-preview-subject ccr-compare-size-subject is-measure-block" aria-hidden="true" style="${escapeHtml(subjectStyle)}"></div>
+    </div>`;
+  }
 
 function spacingPreviewMarkup(item, style, large) {
   const model = spacingModel(item);
@@ -921,6 +976,8 @@ function positionValueLabel(item) {
 }
 
 function sizeValueLabel(item) {
+  const result = buildCalcResults(item).find((entry) => entry.result);
+  if (result) return result.result;
   const declarations = declarationMap(item.cssText);
   return firstSimpleValue(declarations, /^(width|height|min-width|min-height|max-width|max-height)$/);
 }
@@ -935,7 +992,7 @@ function firstSimpleValue(declarations, pattern) {
 }
 
 function simpleCssValueLabel(value) {
-  const trimmed = value.trim();
+  const trimmed = value.replace(/\s*!important\s*$/i, "").trim();
   if (/^-?\d*\.?\d+(%|px|rem|em|ch|vw|vh|svw|svh|dvw|dvh)$/.test(trimmed)) return trimmed;
   const calculated = multiplyLiteralCssCalc(trimmed);
   if (calculated) return calculated;
@@ -957,13 +1014,18 @@ function comparePreviewClass(item) {
   return `is-${orientation}`;
 }
 
-function comparePreviewMarkup(item) {
+function compareBoardLayout(item) {
+  const base = stripVariants(item.name);
+  const declarations = declarationMap(item.cssText);
+  if (item.previewType === "color-preview" || item.previewType === "box-preview") return "grid";
+  if (/^inset([xytrbl]?|-.+)?$/.test(base) || hasAnyDeclaration(declarations, ["inset"])) return "grid";
+  return compareOrientation(item) === "vertical" ? "vertical-overlay" : "horizontal-overlay";
+}
+
+function comparePreviewMarkup(item, layout) {
+  if (layout === "grid") return previewMarkup(item, true);
   const style = previewStyle(item);
-  if (compareKind(item) === "size") {
-    return `<div class="ccr-compare-size-frame">
-      <div class="ccr-preview-subject ccr-compare-size-subject" style="${escapeHtml(style)}">Item</div>
-    </div>`;
-  }
+  if (compareKind(item) === "size") return sizePreviewMarkup(item, style, true);
   if (item.previewType === "position-preview") {
     return `<div class="ccr-compare-position-frame">
       <div class="ccr-preview-origin ccr-position-origin" style="${escapeHtml(positionOriginStyle(style))}" aria-hidden="true">Item</div>
@@ -979,13 +1041,88 @@ function compareKind(item) {
   return "position";
 }
 
+function isCompareSizePreview(item) {
+  return compareKind(item) === "size";
+}
+
 function compareOrientation(item) {
   const base = stripVariants(item.name);
   const declarations = declarationMap(item.cssText);
+  if (/^(m[xlr]?|p[xlr]?)-/.test(base) || hasDeclarationLike(declarations, /^(margin|padding)-(left|right|inline)|^(margin|padding)-inline$/)) return "horizontal";
+  if (/^(m[tyb]?|p[tyb]?)-/.test(base) || hasDeclarationLike(declarations, /^(margin|padding)-(top|bottom|block)|^(margin|padding)-block$/)) return "vertical";
   if (/^(top|bottom|translate-y|h|min-h|max-h)/.test(base) || hasAnyDeclaration(declarations, ["top", "bottom", "height", "min-height", "max-height"])) return "vertical";
   if (/^(left|right|translate-x|w|min-w|max-w)/.test(base) || hasAnyDeclaration(declarations, ["left", "right", "width", "min-width", "max-width"])) return "horizontal";
   return "horizontal";
 }
+
+function compareMagnitude(item) {
+  if (item.previewType === "spacing-preview") {
+    const model = spacingModel(item);
+    return model.kind === "gap" ? 0 : cssPixelMagnitude(model.valueLabel);
+  }
+
+  const label = positionValueLabel(item) || sizeValueLabel(item);
+  return cssPixelMagnitude(label);
+}
+
+  function compareCardStyle(item, items) {
+    if (!isActualVerticalSizePreview(item, compareBoardLayout(item))) return "";
+    const metrics = sizePreviewMetrics(item, true);
+    return `--ccr-item-frame-height: ${metrics.frameHeight}px`;
+  }
+
+    function sizeSubjectStyle(item, style, large = false, metrics = null) {
+      const declarations = declarationMap(item.cssText);
+      const vertical = hasDeclarationLike(declarations, /^(height|min-height|max-height)$/) || /^(h|min-h|max-h)-/.test(stripVariants(item.name));
+      const ratioStyle = compareSizeSubjectStyle(item, large, vertical, metrics || sizePreviewMetrics(item, large));
+      const baseStyle = stripSizeDeclarations(style);
+      if (!ratioStyle) return baseStyle;
+      return baseStyle ? `${baseStyle}; ${ratioStyle}` : ratioStyle;
+    }
+
+    function compareSizeSubjectStyle(item, large, vertical, metrics) {
+      const frameHeight = metrics?.frameHeight ?? (large ? 420 : 290);
+      const frameWidth = large ? 240 : 72;
+      const subjectExtent = metrics?.subjectExtent ?? compareMagnitude(item);
+      if (vertical) {
+        return `width: 100%; min-height: 0; max-height: none; height: ${subjectExtent}px`;
+      }
+      const inCompareFamily = state.viewMode === "compare" && state.selected?.familyKey === item.familyKey;
+      const visible = inCompareFamily ? getVisibleClasses() : [item];
+      const maxMagnitude = Math.max(...visible.map(compareMagnitude), 0);
+      const ratio = maxMagnitude > 0 ? subjectExtent / maxMagnitude : 1;
+      const horizontalExtent = Math.max(52, Math.min(frameWidth, Math.round(frameWidth * ratio)));
+      return `height: 100%; min-width: 0; max-width: none; width: ${horizontalExtent}px`;
+    }
+
+  function stripSizeDeclarations(styleText) {
+    return String(styleText || "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !/^(width|height|min-width|min-height|max-width|max-height)\s*:/.test(part))
+      .join("; ");
+  }
+
+    function sizePreviewMetrics(item, large = false) {
+      const declarations = declarationMap(item.cssText);
+      const vertical = hasDeclarationLike(declarations, /^(height|min-height|max-height)$/) || /^(h|min-h|max-h)-/.test(stripVariants(item.name));
+      const actualVertical = vertical && (large || isActualVerticalSizePreview(item, compareBoardLayout(item)));
+      const magnitude = Math.max(0, Math.round(compareMagnitude(item)));
+      if (vertical) {
+        const subjectExtent = actualVertical ? magnitude : Math.max(34, Math.min(large ? 420 : 290, magnitude || 34));
+        const frameHeight = subjectExtent;
+        const previewHeight = frameHeight + 30;
+        return { vertical: true, frameHeight, previewHeight, subjectExtent };
+      }
+      const subjectExtent = Math.max(52, Math.min(large ? 240 : 72, magnitude || 52));
+      return { vertical: false, frameHeight: large ? 84 : 32, previewHeight: large ? 128 : 48, subjectExtent };
+    }
+
+    function isActualVerticalSizePreview(item, layout = compareBoardLayout(item)) {
+      return layout === "vertical-overlay" && compareKind(item) === "size" && compareOrientation(item) === "vertical";
+    }
+
 
 function spacingModel(item) {
   const declarations = declarationMap(item.cssText);
@@ -1026,15 +1163,23 @@ function firstDeclaration(declarations, pattern) {
   return Array.from(declarations).find(([property]) => pattern.test(property));
 }
 
-function cssPixelMagnitude(value) {
-  const match = String(value).trim().match(/^-?(\d*\.?\d+)([A-Za-z%]*)/);
-  if (!match) return 8;
-  const amount = Math.abs(Number(match[1]));
-  const unit = match[2] || "px";
-  if (unit === "rem" || unit === "em") return amount * 16;
-  if (unit === "px") return amount;
-  return Math.min(24, amount * 12);
-}
+  function cssPixelMagnitude(value) {
+    const match = String(value).trim().match(/^-?(\d*\.?\d+)([A-Za-z%]*)/);
+    if (!match) return 8;
+    const amount = Math.abs(Number(match[1]));
+    const unit = match[2] || "px";
+    if (unit === "rem" || unit === "em") return amount * 16;
+    if (unit === "px") return amount;
+    if (unit === "vw" || unit === "svw" || unit === "dvw") {
+      const viewportWidth = typeof window !== "undefined" ? window.innerWidth || 0 : 0;
+      return viewportWidth ? (viewportWidth * amount) / 100 : amount * 12;
+    }
+    if (unit === "vh" || unit === "svh" || unit === "dvh") {
+      const viewportHeight = typeof window !== "undefined" ? window.innerHeight || 0 : 0;
+      return viewportHeight ? (viewportHeight * amount) / 100 : amount * 12;
+    }
+    return Math.min(24, amount * 12);
+  }
 
 function marginZeroStyle(style) {
   return `${spacingSubjectStyle(style)}; margin: 0; margin-inline: 0; margin-block: 0; margin-top: 0; margin-right: 0; margin-bottom: 0; margin-left: 0`;
@@ -1046,6 +1191,62 @@ function spacingSubjectStyle(style) {
 
 function positionOriginStyle(style) {
   return `${style}; position: relative; inset: auto; top: auto; right: auto; bottom: auto; left: auto; translate: none; rotate: none; scale: none; transform: none`;
+}
+
+function hasObjectPreview(item) {
+  const base = stripVariants(item.name);
+  const declarations = declarationMap(item.cssText);
+  return base.startsWith("object-") || hasAnyDeclaration(declarations, ["object-fit", "object-position"]);
+}
+
+function objectPreviewConfig(item) {
+  const base = stripVariants(item.name);
+  if (base === "object-contain") {
+    return {
+      backgroundSize: "auto 100%",
+      label: "完整顯示",
+    };
+  }
+  if (base === "object-cover") {
+    return {
+      backgroundSize: "100% auto",
+      label: "填滿裁切",
+    };
+  }
+  if (base === "object-center") {
+    return {
+      backgroundSize: "100% auto",
+      backgroundPosition: "center center",
+      label: "基底：object-cover",
+    };
+  }
+  if (base === "object-top") {
+    return {
+      backgroundSize: "100% auto",
+      backgroundPosition: "center top",
+      label: "基底：object-cover",
+    };
+  }
+
+  const declarations = declarationMap(item.cssText);
+  return {
+    backgroundSize: declarations.get("object-fit") === "contain" ? "auto 100%" : "100% auto",
+    backgroundPosition: declarations.get("object-position") || "",
+    label: declarations.has("object-position") ? "基底：object-cover" : "object preview",
+  };
+}
+
+function objectImageStyle(config) {
+  const base = [
+    "width: 100%",
+    "height: 100%",
+    "display: block",
+    `background-image: url(${OBJECT_TEST_PATTERN_URL})`,
+    "background-repeat: no-repeat",
+    `background-size: ${config.backgroundSize}`,
+  ];
+  if (config.backgroundPosition) base.push(`background-position: ${config.backgroundPosition}`);
+  return base.join("; ");
 }
 
 function previewStyle(item) {
