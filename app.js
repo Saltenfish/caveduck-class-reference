@@ -453,7 +453,7 @@ function getFilteredClasses() {
 }
 
 function getVisibleClasses() {
-  if (state.viewMode !== "family") return getFilteredClasses();
+  if (state.viewMode !== "family" && state.viewMode !== "compare") return getFilteredClasses();
   const key = state.selected?.familyKey;
   if (!key) return [];
   return state.families.get(key) || [];
@@ -468,6 +468,10 @@ function renderViewControls(total) {
     els.viewLabel.textContent = `${state.selected.familyKey} 同系列：${total.toLocaleString()} classes`;
     return;
   }
+  if (state.viewMode === "compare" && state.selected) {
+    els.viewLabel.textContent = `${state.selected.familyKey} compare：${total.toLocaleString()} classes`;
+    return;
+  }
   els.viewLabel.textContent = "";
 }
 
@@ -479,6 +483,11 @@ function renderList(items, total, totalPages) {
 
   const start = (state.page - 1) * PAGE_SIZE + 1;
   const end = Math.min(state.page * PAGE_SIZE, total);
+
+  if (state.viewMode === "compare") {
+    renderCompareList(items, start, end, total, totalPages);
+    return;
+  }
 
   els.list.innerHTML =
     items
@@ -511,6 +520,47 @@ function renderList(items, total, totalPages) {
       render();
     });
   });
+}
+
+function renderCompareList(items, start, end, total, totalPages) {
+  els.list.innerHTML =
+    `<div class="ccr-compare-list">
+      ${items.map(compareRowMarkup).join("")}
+    </div>` + paginationMarkup(start, end, total, totalPages);
+
+  els.list.querySelectorAll(".ccr-compare-row").forEach((row) => {
+    row.addEventListener("click", () => selectClass(row.dataset.class));
+  });
+
+  els.list.querySelectorAll("[data-page-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.page += button.dataset.pageAction === "next" ? 1 : -1;
+      render();
+    });
+  });
+}
+
+function compareRowMarkup(item) {
+  const selected = item === state.selected ? " is-selected" : "";
+  const value = positionValueLabel(item) || sizeValueLabel(item) || "";
+  return `<article class="ccr-compare-row${selected}" data-class="${escapeHtml(item.name)}">
+    <div class="ccr-compare-meta">
+      <div class="ccr-class-cell">
+        <code class="ccr-class-name">${escapeHtml(item.name)}</code>
+        <button class="ccr-copy" type="button" data-copy-value="${escapeHtml(item.name)}" aria-label="Copy ${escapeHtml(item.name)}">
+          ${copyIcon()}
+        </button>
+      </div>
+      <div class="ccr-summary">
+        <span>${escapeHtml(item.declaration)}</span>
+        ${calcSummaryMarkup(item)}
+      </div>
+    </div>
+    <div class="ccr-compare-preview ${comparePreviewClass(item)}">
+      ${comparePreviewMarkup(item)}
+      ${value ? `<span class="ccr-box-value">${escapeHtml(value)}</span>` : ""}
+    </div>
+  </article>`;
 }
 
 function selectClass(name) {
@@ -838,9 +888,83 @@ function spacingValueMarkup(item) {
     return `<span class="ccr-box-value">${escapeHtml(model.valueLabel)}</span>`;
   }
 
+  const value = positionValueLabel(item);
+  if (!value) return "";
+  return `<span class="ccr-box-value">${escapeHtml(value)}</span>`;
+}
+
+function positionValueLabel(item) {
   const result = buildCalcResults(item).find((entry) => entry.result);
-  if (!result) return "";
-  return `<span class="ccr-box-value">${escapeHtml(result.result)}</span>`;
+  if (result) return result.result;
+  const declarations = declarationMap(item.cssText);
+  return firstSimpleValue(declarations, /^(top|right|bottom|left|inset|translate|width|height|--tw-translate-x|--tw-translate-y)$/);
+}
+
+function sizeValueLabel(item) {
+  const declarations = declarationMap(item.cssText);
+  return firstSimpleValue(declarations, /^(width|height|min-width|min-height|max-width|max-height)$/);
+}
+
+function firstSimpleValue(declarations, pattern) {
+  for (const [property, value] of declarations) {
+    if (!pattern.test(property)) continue;
+    const label = simpleCssValueLabel(value);
+    if (label) return label;
+  }
+  return "";
+}
+
+function simpleCssValueLabel(value) {
+  const trimmed = value.trim();
+  if (/^-?\d*\.?\d+(%|px|rem|em|ch|vw|vh|svw|svh|dvw|dvh)$/.test(trimmed)) return trimmed;
+  const calculated = multiplyLiteralCssCalc(trimmed);
+  if (calculated) return calculated;
+  return "";
+}
+
+function multiplyLiteralCssCalc(value) {
+  let match = value.match(/^calc\(\s*(-?\d*\.?\d+)(%|px|rem|em|ch|vw|vh|svw|svh|dvw|dvh)\s*\*\s*(-?\d*\.?\d+)\s*\)$/);
+  if (!match) {
+    match = value.match(/^calc\(\s*(-?\d*\.?\d+)\s*\*\s*(-?\d*\.?\d+)(%|px|rem|em|ch|vw|vh|svw|svh|dvw|dvh)\s*\)$/);
+    if (!match) return "";
+    return `${formatNumber(Number(match[1]) * Number(match[2]))}${match[3]}`;
+  }
+  return `${formatNumber(Number(match[1]) * Number(match[3]))}${match[2]}`;
+}
+
+function comparePreviewClass(item) {
+  const orientation = compareOrientation(item);
+  return `is-${orientation}`;
+}
+
+function comparePreviewMarkup(item) {
+  const style = previewStyle(item);
+  if (compareKind(item) === "size") {
+    return `<div class="ccr-compare-size-frame">
+      <div class="ccr-preview-subject ccr-compare-size-subject" style="${escapeHtml(style)}">Item</div>
+    </div>`;
+  }
+  if (item.previewType === "position-preview") {
+    return `<div class="ccr-compare-position-frame">
+      <div class="ccr-preview-origin ccr-position-origin" style="${escapeHtml(positionOriginStyle(style))}" aria-hidden="true">Item</div>
+      <div class="ccr-preview-subject ccr-position-subject" style="${escapeHtml(style)}">Item</div>
+    </div>`;
+  }
+  return previewMarkup(item, true);
+}
+
+function compareKind(item) {
+  const declarations = declarationMap(item.cssText);
+  if (hasDeclarationLike(declarations, /^(width|height|min-width|min-height|max-width|max-height)$/)) return "size";
+  return "position";
+}
+
+function compareOrientation(item) {
+  const base = stripVariants(item.name);
+  const declarations = declarationMap(item.cssText);
+  if (/^(top|bottom|translate-y|h|min-h|max-h)/.test(base) || hasAnyDeclaration(declarations, ["top", "bottom", "height", "min-height", "max-height"])) return "vertical";
+  if (/^(left|right|translate-x|w|min-w|max-w)/.test(base) || hasAnyDeclaration(declarations, ["left", "right", "width", "min-width", "max-width"])) return "horizontal";
+  return "horizontal";
 }
 
 function spacingModel(item) {
