@@ -262,11 +262,18 @@ function stripVariants(name) {
 }
 
 function detectPreviewType(base, declarations, name) {
-  if (/^(sr-only|hidden|invisible|collapse|pointer-events|cursor|select|resize|appearance|touch|snap|aria|group|peer)/.test(base)) return "no-preview";
-  if (/^(hover|focus|active|disabled):/.test(name) || /(^|:)hover:|(^|:)focus:|(^|:)active:/.test(name)) return "state-preview";
+  if (/^cursor-/.test(base) || hasAnyDeclaration(declarations, ["cursor"])) return "cursor-preview";
+  if (/^(hover):/.test(name) || /(^|:)hover:/.test(name)) return detectStaticPreviewType(base, declarations);
+  if (/^(sr-only|hidden|invisible|collapse|pointer-events|select|resize|appearance|touch|snap|aria|group|peer)/.test(base)) return "no-preview";
+  if (/^(focus|active|disabled):/.test(name) || /(^|:)focus:|(^|:)active:/.test(name)) return "state-preview";
+  return detectStaticPreviewType(base, declarations);
+}
+
+function detectStaticPreviewType(base, declarations) {
   if (/^(duration|transition|delay|ease)-/.test(base)) return "no-preview";
   if (/^(top|right|bottom|left|inset|z-|absolute|relative|fixed|sticky|static|translate|rotate|scale|skew|transform)/.test(base) || hasAnyDeclaration(declarations, ["top", "right", "bottom", "left", "inset", "position", "z-index", "translate", "rotate", "scale", "transform"])) return "position-preview";
   if (/^(m[trblxy]?|p[trblxy]?|gap|space-[xy])-/.test(base) || hasDeclarationLike(declarations, /^(margin|padding|gap|row-gap|column-gap)/)) return "spacing-preview";
+  if (/^(rounded|border|outline|ring)/.test(base) || hasDeclarationLike(declarations, /^(border|outline)/)) return "box-preview";
   if (/^(bg|text|border|fill|stroke|accent|caret|from|via|to)-/.test(base) || hasDeclarationLike(declarations, /(color|background|fill|stroke)/)) return "color-preview";
   if (/^(font|text|leading|tracking|truncate|line-clamp|whitespace|break|decoration|underline|uppercase|lowercase|capitalize|prose)/.test(base) || hasDeclarationLike(declarations, /(font|line-height|letter-spacing|text-overflow|white-space)/)) return "typography-preview";
   if (/^(flex|grid|block|inline|table|contents|flow-root|container|overflow|object|aspect|w-|h-|min-|max-|basis)/.test(base) || hasDeclarationLike(declarations, /^(display|grid|flex|overflow|width|height|max-width|min-width|aspect-ratio)/)) return "layout-preview";
@@ -301,7 +308,9 @@ function detectRequirements(base, declarations, name, previewType) {
   if (/^(top|right|bottom|left|inset|z-)/.test(base)) return ["需搭配 position: relative / absolute / fixed / sticky；單獨使用時可能沒有可見效果。"];
   if (/^(truncate|text-ellipsis|line-clamp)/.test(base)) return ["需有寬度限制與 overflow 條件，文字超出時才看得出效果。"];
   if (/^(gap|space-[xy])/.test(base)) return ["需套在 flex / grid 或有多個子元素的容器上。"];
-  if (/^(group|peer|aria|hover|focus|active|disabled)/.test(name) || previewType === "state-preview") return ["需要特定互動狀態、父層 class 或 ARIA/data 狀態才會觸發。"];
+  if (previewType === "cursor-preview") return ["游標效果需在有游標的瀏覽平台上，將滑鼠移到 preview 元素上才看得到。"];
+  if (/^(hover):/.test(name) || /(^|:)hover:/.test(name)) return ["此 preview 直接模擬 hover 後的樣式；實際使用時仍需使用者滑鼠 hover 才會觸發。"];
+  if (/^(group|peer|aria|focus|active|disabled)/.test(name) || previewType === "state-preview") return ["需要特定互動狀態、父層 class 或 ARIA/data 狀態才會觸發。"];
   if (previewType === "no-preview") return ["此 class 偏行為或瀏覽器狀態，通常無法用單一靜態方塊完整預覽。"];
   if (hasDeclarationLike(declarations, /var\(--tw-/)) return ["部分 Tailwind 組合變數需要搭配同系列 class 才會產生完整效果。"];
   return ["可直接套用在 Caveduck 允許的 HTML 元素 class 屬性上。"];
@@ -381,6 +390,8 @@ function previewTypeLabel(type) {
     "position-preview": "定位",
     "spacing-preview": "間距",
     "color-preview": "色彩",
+    "cursor-preview": "游標",
+    "box-preview": "盒模型",
     "typography-preview": "文字排版",
     "layout-preview": "版面",
     "effect-preview": "裝飾效果",
@@ -860,6 +871,12 @@ function previewContent(item, large = false) {
   if (item.previewType === "layout-preview") {
     return `<div class="ccr-preview-subject ccr-layout-sample" style="${escapeHtml(style)}"><span>A</span><span>B</span><span>C</span></div>`;
   }
+  if (item.previewType === "box-preview") {
+    return `<div class="ccr-box-frame"><div class="ccr-preview-subject ccr-box-sample" style="${escapeHtml(style)}">Item</div></div>`;
+  }
+  if (item.previewType === "cursor-preview") {
+    return `<div class="ccr-cursor-frame"><div class="ccr-preview-subject ccr-cursor-sample" style="${escapeHtml(style)}">Cursor</div><span>游標平台限定</span></div>`;
+  }
   if (item.previewType === "effect-preview") {
     return `<div class="ccr-effect-frame"><div class="ccr-preview-subject" style="${escapeHtml(style)}">Item</div></div>`;
   }
@@ -1032,6 +1049,8 @@ function previewStyle(item) {
   const declarations = declarationMap(item.cssText);
   const base = [
     "box-sizing: border-box",
+    "--tw-border-style: solid",
+    "--tw-outline-style: solid",
     "display: inline-flex",
     "align-items: center",
     "justify-content: center",
@@ -1049,6 +1068,7 @@ function previewStyle(item) {
 
   if (item.previewType === "typography-preview") base.push("width: 118px", "background-color: #ffffff");
   if (item.previewType === "layout-preview") base.push("width: 126px", "gap: 6px");
+  if (item.previewType === "box-preview") base.push("width: 72px", "height: 38px", "background-color: rgba(228, 246, 247, 0.42)");
   if (item.previewType === "position-preview" && !declarations.has("position")) base.push("position: relative");
 
   const removes = removalKeysFor(declarations);

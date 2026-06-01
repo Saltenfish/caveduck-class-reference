@@ -497,7 +497,9 @@ body[data-preview-bg="background"] .ccr-preview-stage {
 
 .ccr-preview-frame,
 .ccr-spacing-frame,
-.ccr-effect-frame {
+.ccr-effect-frame,
+.ccr-box-frame,
+.ccr-cursor-frame {
   position: relative;
   display: grid;
   place-items: center;
@@ -508,7 +510,9 @@ body[data-preview-bg="background"] .ccr-preview-stage {
 
 .ccr-preview-canvas.is-large .ccr-preview-frame,
 .ccr-preview-canvas.is-large .ccr-spacing-frame,
-.ccr-preview-canvas.is-large .ccr-effect-frame {
+.ccr-preview-canvas.is-large .ccr-effect-frame,
+.ccr-preview-canvas.is-large .ccr-box-frame,
+.ccr-preview-canvas.is-large .ccr-cursor-frame {
   min-height: 128px;
 }
 
@@ -721,6 +725,24 @@ body[data-preview-bg="background"] .ccr-preview-stage {
 
 .ccr-text-sample {
   margin: 0;
+}
+
+.ccr-box-sample {
+  overflow: visible;
+}
+
+.ccr-cursor-frame {
+  gap: 5px;
+}
+
+.ccr-cursor-frame span {
+  color: var(--ccr-muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ccr-cursor-sample {
+  user-select: none;
 }
 
 .ccr-preview-origin {
