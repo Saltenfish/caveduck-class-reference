@@ -512,7 +512,7 @@ body[data-preview-bg="background"] .ccr-preview-stage {
   min-height: 128px;
 }
 
-.ccr-preview-origin.ccr-spacing-origin {
+.ccr-spacing-origin {
   position: relative;
   display: grid;
   place-items: center;
@@ -657,6 +657,30 @@ body[data-preview-bg="background"] .ccr-preview-stage {
   padding-left: var(--ccr-margin-size, 10px);
 }
 
+.ccr-spacing-origin.side-top .ccr-margin-fill,
+.ccr-spacing-origin.side-top .ccr-margin-ghost,
+.ccr-spacing-origin.side-top .ccr-margin-subject {
+  align-self: end;
+}
+
+.ccr-spacing-origin.side-bottom .ccr-margin-fill,
+.ccr-spacing-origin.side-bottom .ccr-margin-ghost,
+.ccr-spacing-origin.side-bottom .ccr-margin-subject {
+  align-self: start;
+}
+
+.ccr-spacing-origin.side-left .ccr-margin-fill,
+.ccr-spacing-origin.side-left .ccr-margin-ghost,
+.ccr-spacing-origin.side-left .ccr-margin-subject {
+  justify-self: end;
+}
+
+.ccr-spacing-origin.side-right .ccr-margin-fill,
+.ccr-spacing-origin.side-right .ccr-margin-ghost,
+.ccr-spacing-origin.side-right .ccr-margin-subject {
+  justify-self: start;
+}
+
 .ccr-box-value {
   position: absolute;
   right: 7px;
@@ -722,8 +746,9 @@ body[data-preview-bg="background"] .ccr-preview-stage {
   width: auto;
   height: auto;
   transform: none;
-  border: 1px dashed rgba(209, 136, 46, 0.72) !important;
-  background: transparent !important;
+  border-color: rgba(16, 33, 43, 0.18) !important;
+  border-style: solid !important;
+  background: rgba(255, 255, 255, 0.58) !important;
   color: transparent !important;
 }
 

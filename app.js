@@ -320,7 +320,7 @@ function describePurpose(base, declarations, name, previewType) {
   if (/^(flex|grid|block|inline|hidden|overflow|container|w-|h-|min-|max-)/.test(base)) return "控制版面、顯示方式、尺寸或溢出行為。";
   if (/^(shadow|blur|backdrop|filter|opacity|animate|transition|rotate|scale|translate)/.test(base)) return "控制陰影、濾鏡、透明度、動畫或變形效果。";
   if (isCaveduckSpecific(name, declarations)) return "Caveduck CSS 中的自訂 class 或設計 token，可用於貼近站內既有風格。";
-  return `${previewTypeLabel(previewType)} 類 utility，效果來自 CSS declaration。`;
+  return `${previewTypeLabel(previewType)}類 utility，效果來自 CSS declaration。`;
 }
 
 function exampleHtmlFor(className, previewType, base) {
@@ -822,7 +822,7 @@ function spacingPreviewMarkup(item, style, large) {
     return `<div class="ccr-spacing-frame"><div class="ccr-preview-subject ccr-layout-sample" style="${escapeHtml(style)}"><span>A</span><span>B</span><span>C</span></div></div>`;
   }
   return `<div class="ccr-spacing-frame">
-    <div class="ccr-preview-origin ccr-spacing-origin is-${model.kind} ${model.negative ? "is-negative" : "is-positive"} side-${model.side}" style="--ccr-margin-size: ${model.strength}px">
+    <div class="ccr-spacing-origin is-${model.kind} ${model.negative ? "is-negative" : "is-positive"} side-${model.side}" style="--ccr-margin-size: ${model.strength}px">
       <div class="ccr-margin-fill" aria-hidden="true"></div>
       <div class="ccr-margin-ghost" style="${escapeHtml(marginZeroStyle(style))}" aria-hidden="true">Item</div>
       <div class="ccr-preview-subject ccr-margin-subject" style="${escapeHtml(spacingSubjectStyle(style))}">Item</div>
