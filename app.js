@@ -114,10 +114,6 @@ function bindEvents() {
       state.variantFilter = "All";
     }
     render();
-    // 綁定手機版關閉視窗功能
-    document.getElementById('closeDetailBtn')?.addEventListener('click', () => {
-      document.querySelector('.ccr-detail')?.classList.remove('is-active');
-    });   
   });
 
   els.copySelected.addEventListener("click", () => {
@@ -153,6 +149,12 @@ function bindEvents() {
   }
 
   document.addEventListener("click", (event) => {
+    // 點擊手機版關閉視窗按鈕
+    if (event.target && event.target.id === 'closeDetailBtn') {
+      document.querySelector('.ccr-detail')?.classList.remove('is-active');
+      return; // 執行完就結束，不用往下跑
+    }
+
     const copyButton = event.target.closest("[data-copy-value]");
     if (copyButton) {
       copyClass(copyButton.dataset.copyValue);
@@ -165,6 +167,11 @@ function bindEvents() {
       state.viewMode = "family";
       state.page = 1;
       render();
+      
+      // 在手機版上，當點擊「同系列」的 class 換頁時，自動把視窗拉起來顯示內容
+      if (window.innerWidth <= 760) {
+        document.querySelector('.ccr-detail')?.classList.add('is-active');
+      }
       return;
     }
 
@@ -783,9 +790,15 @@ function compareBoardStyle(items) {
 function selectClass(name) {
   state.selected = state.classes.find((item) => item.name === name) || state.selected;
   renderDetail();
+  
   els.list.querySelectorAll(".ccr-row").forEach((row) => {
     row.classList.toggle("is-selected", row.dataset.class === name);
   });
+
+  //當使用者主動點選 Class 觸發 selectClass 時，才把手機版彈窗拉起來
+  if (window.innerWidth <= 760) {
+    document.querySelector('.ccr-detail')?.classList.add('is-active');
+  }
 }
 
 function renderDetail() {
@@ -831,8 +844,7 @@ function renderDetail() {
       ${familyMarkup(item)}
     </section>`;
 
-  // 在 renderDetail 的最後面加上
-  document.querySelector('.ccr-detail')?.classList.add('is-active');
+  //document.querySelector('.ccr-detail')?.classList.add('is-active');
 }
 
 function listMarkup(items) {
