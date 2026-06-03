@@ -113,13 +113,11 @@ function bindEvents() {
       state.usage = "All";
       state.variantFilter = "All";
     }
-
+    render();
     // 綁定手機版關閉視窗功能
     document.getElementById('closeDetailBtn')?.addEventListener('click', () => {
       document.querySelector('.ccr-detail')?.classList.remove('is-active');
-    });
-
-    render();
+    });   
   });
 
   els.copySelected.addEventListener("click", () => {

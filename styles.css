@@ -1922,26 +1922,27 @@ body[data-preview-bg="background"] .ccr-compare-card-preview {
     bottom: 0;
     left: 0;
     width: 100% !important;
-    height: 85vh; /* 佔據螢幕 85% 高度 */
-    background: var(--ccr-surface); /* 自動支援你的深色模式 */
-    z-index: 9999;
+    height: 85vh;
+    background: var(--ccr-surface);
+    /* 確保 z-index 夠高，高於原本可能固定在手機上方的 tabs */
+    z-index: 10000 !important; 
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
     border-radius: 20px 20px 0 0;
     overflow-y: auto;
     padding: 20px 16px 40px !important;
     
-    /* 預設隱藏，並加上平滑拉出的動畫 */
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94);
-    display: block !important; /* 蓋掉原本的 display 邏輯 */
-    pointer-events: none; /* 隱藏時不可點擊 */
+    /* ✨ 補上 opacity 的過渡，讓動效更平滑 */
+    transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94), opacity 0.3s ease;
+    display: block !important;
+    pointer-events: none;
     opacity: 0;
   }
 
-  /* 當面板被激活時的樣式 */
   .ccr-detail.is-active {
     transform: translateY(0);
-    pointer-events: auto;
+    /* ✨ 確保激活時，滑鼠和手指點擊事件能夠 100% 被接收 */
+    pointer-events: all !important; 
     opacity: 1;
   }
 
